@@ -1,0 +1,4 @@
+Metadata-Version: 2.1
+Name: ThreadTimeline
+Version: 1
+Summary: Implementation of SeQUeNCe parallel library using Python/C API Interpreters module for sub-interpreters instead of MPI
