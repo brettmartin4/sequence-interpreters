@@ -8,7 +8,6 @@ import fcntl
 import subprocess
 
 #from .t_timeline import ThreadedTimeline
-#from .thold import TholdNode
 
 from thread_timeline import ThreadedTimeline, TholdNode
 
