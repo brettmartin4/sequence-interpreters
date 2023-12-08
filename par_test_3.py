@@ -7,7 +7,6 @@ import time
 import fcntl
 import subprocess
 
-#from .t_timeline import ThreadedTimeline
 
 from thread_timeline import ThreadedTimeline, TholdNode
 
