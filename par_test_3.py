@@ -11,7 +11,7 @@ import subprocess
 #from .thold import TholdNode
 
 from thread_timeline import ThreadedTimeline, TholdNode
-    
+
 
 def cleanup_interpreters():
     for i in interpreters.list_all():
