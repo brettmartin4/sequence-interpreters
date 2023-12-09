@@ -29,7 +29,7 @@ class TholdNode:
             process = Process(entity, 'get', [])
         #event = Event(self.timeline.now() + self.lookahead + int(
         #    exponential(self.lookahead)), process)
-        event = Event(self.timeline.now() + self.lookahead + int(expovariate(self.lookahead)), process)
+        event = Event(self.timeline.now() + self.lookahead + int(expovariate(1/self.lookahead)), process)
         return event
 
     def init(self):

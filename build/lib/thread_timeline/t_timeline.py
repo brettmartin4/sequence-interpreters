@@ -35,7 +35,7 @@ class ThreadedTimeline(Timeline):
         send_fifo (str): Name of the FIFO through which data is sent to another interpreter.
     """
 
-    def __init__(self, recv_fifo, send_fifo, lookahead: int, stop_time=float('inf')):
+    def __init__(self, recv_file, send_file, mutex, lookahead: int, stop_time=float('inf')):
         """Constructor for ThreadedTimeline class.
         
         Also creates a quantum manager client, unless `qm_ip` and `qm_port` are both set to None. Removed
@@ -58,8 +58,9 @@ class ThreadedTimeline(Timeline):
         #if qm_ip is not None and qm_port is not None:
         #    self.quantum_manager = QuantumManagerClient(formalism, qm_ip, qm_port)
 
-        self.recv_fifo = recv_fifo
-        self.send_fifo = send_fifo
+        self.recv_file = recv_file
+        self.send_file = send_file
+        self.mutex = mutex
 
         #self.show_progress = False
 
@@ -102,6 +103,45 @@ class ThreadedTimeline(Timeline):
             return float('inf')
         
 
+    def send_event_buffer_to_file(self, index):
+
+        with self.mutex:   # Acquire mutex lock
+            #print(f"{self.id} Writing event buffer of size {len(self.event_buffer[0])} or {len(self.event_buffer[1])}\n")
+            with open(self.send_file, 'wb') as file:
+                # Write data as tuple to entire event buffer can be written at once
+                pickle.dump((self.event_buffer[index],), file)
+
+
+    def receive_event_buffer_from_file(self):
+
+        # Repeat until the read file populates.
+        # Depending on how SeQUeNCe timelines handle read/write ops between
+        # synchronization windows, I may be able to remove the while loop.
+        # TODO: Verify this later...
+        while True:
+            if os.path.exists("signal.txt"):
+                return [float('inf')]
+            try:
+                with self.mutex:   # Acquire mutex lock
+                    with open(self.recv_file, 'rb') as file:
+                        #file_size = os.path.getsize(file)
+                        file_size = os.fstat(file.fileno()).st_size
+
+                        if file_size == 0:
+                            continue
+
+                        # Load data as tuple, take event buffer list from start index
+                        data = pickle.load(file)[0]
+                    # Clear file when done reading
+                    with open(self.recv_file, 'wb') as file:
+                        pass
+                    return data
+            except IOError as e:
+                if e.errno != 11:  # Ignore "Resource temporarily unavailable" error
+                    raise
+                pass
+        
+
     def run(self):
         """Runs the simulation until stop time is reached."""
         
@@ -120,19 +160,17 @@ class ThreadedTimeline(Timeline):
             # The following lines until "END UPDATE" are all meant to replace the following line from the parallel timeline:
             #inbox = MPI.COMM_WORLD.alltoall(self.event_buffer)
 
-            # Serialize the event buffer as a tuple to send over the FIFO all at once
-            serialized_buf = pickle.dumps((self.event_buffer,))
+            # Get index of event buffer that contains all other foreign events
+            buf_index = 1 - int(self.id)
 
-            # Send event buffer to other thread's FIFO (self.send_fifo)
-            with os.open(self.send_fifo, os.O_WRONLY) as fifo:
-                os.write(fifo, serialized_buf)
+            # Send data from current timeline to queue file
+            self.send_event_buffer_to_file(buf_index)
 
-            # Read event buffer data in from receiver FIFO
-            with open(self.recv_fifo, "rb") as fifo:
-                other_buf = pickle.loads(fifo.read())[0]
-
-            # Zip event buffers together
-            inbox = [a + b for a, b in zip(self.event_buffer, other_buf, strict=False)]
+            # Load data from other timelines from other queue file
+            recv_buf = self.receive_event_buffer_from_file()
+            #inbox = [a + b for a, b in zip(self.event_buffer, recv_buf, strict=False)]
+            inbox = []
+            inbox.append(recv_buf)
 
             # END UPDATE #
 
@@ -148,6 +186,8 @@ class ThreadedTimeline(Timeline):
                 min_time = min(min_time, events.pop())
                 # Iterate over all events in the events list, incrememnting the exchange counter and scheduling the event
                 for event in events:
+                    if not isinstance(event, Event):
+                        continue
                     self.exchange_counter += 1
                     self.schedule(event)
 

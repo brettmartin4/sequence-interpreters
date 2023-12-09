@@ -1,8 +1,9 @@
 from test.support import interpreters
 from textwrap import dedent
+from threading import Thread, Lock
 import os
 import argparse
-import threading
+import time
 
 from thread_timeline import ThreadedTimeline, TholdNode
     
@@ -23,35 +24,35 @@ def main(args):
     cur = interpreters.get_current()
     main_interp = interpreters.get_main()
 
+    # Create mutex for locking files for reading/writing between interpreters
+    mutex = Lock()
+
+    # Establish paths for file queues for reading/writing between interpreters
     current_directory = os.getcwd()
+    sub_queue_path = os.path.join(current_directory, 'sub-queue.pkl')
+    main_queue_path = os.path.join(current_directory, 'main-queue.pkl')
 
-    # Set up unidirectional FIFO from main interpreter to subinterpreter
-    try:
-        sub_queue_path = os.path.join(current_directory, 'sub-queue')
-        os.mkfifo(sub_queue_path)
-    except FileExistsError:
-        pass
-
-    # Set up unidirectional FIFO from subinterpreter to main interpreter
-    try:
-        main_queue_path = os.path.join(current_directory, 'main-queue')
-        os.mkfifo(main_queue_path)
-    except FileExistsError:
-        pass
+    # Create queue files:
+    for path in [main_queue_path, sub_queue_path]:
+        with open(path, 'w') as file:
+            pass
 
     # MAIN THREAD ONLY
     if(main_interp.id == cur.id):
         print(f"Interpreter {cur.id} initializing in main interpreter ({os.getcwd()})...")
 
-        recv_fifo = main_queue_path
-        send_fifo = sub_queue_path
+        if os.path.exists("signal.txt"):
+            os.remove("signal.txt")
+
+        recv_file = main_queue_path
+        send_file = sub_queue_path
 
         # Create subinterpreter for the second thread
         interp = interpreters.create()
         print(f"Sub-interpreter ID: {interp}")
 
         # Load current script so it can be ran from subinterpreter
-        file_path = './test_thold.py'
+        file_path = os.path.join(current_directory, 'test_thold.py')
         with open(file_path, 'r') as file:
             file_contents = file.read()
 
@@ -59,19 +60,23 @@ def main(args):
         code = dedent(file_contents)
 
         # Create new thread to run subinterpreter on
-        t = threading.Thread(target=interp.run, args=(code,))
+        t = Thread(target=interp.run, args=(code,))
         t.start()
+
+        # Must sleep for a moment while sub-interpreter spins online.
+        # Otherwise, errors might occur.
+        time.sleep(1)
 
     # SUBINTERPRETER ONLY
     else:
         print(f"Interpreter {cur.id} initializing in subinterpreter ({os.getcwd()})...")
-        recv_fifo = sub_queue_path
-        send_fifo = main_queue_path
+        recv_file = sub_queue_path
+        send_file = main_queue_path
 
     size = len(interpreters.list_all())
 
     node_num = args.total_node // size
-    timeline = ThreadedTimeline(recv_fifo, send_fifo, args.lookahead, args.stop_time)
+    timeline = ThreadedTimeline(recv_file, send_file, mutex, args.lookahead, args.stop_time)
     neighbors = list(range(args.total_node))
     neighbors = list(map(str, neighbors))
     for i in range(args.total_node):
@@ -85,9 +90,17 @@ def main(args):
     print("Running timelines...")
     timeline.run()
 
+    # Print simulation results
     print(timeline.id, timeline.now(), timeline.events.top().time, timeline.sync_counter, timeline.run_counter,
           sum([len(buf) for buf in timeline.event_buffer]), len(timeline.events))
     
+    with open("signal.txt", "w") as file:
+        pass
+    
+    # Clean up interpreters
+    time.sleep(1)
+    if(main_interp.id == cur.id):
+        cleanup_interpreters()
 
 
 if __name__ == "__main__":
