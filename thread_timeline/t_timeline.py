@@ -1,5 +1,4 @@
 from time import time
-from typing import List, TYPE_CHECKING, Optional, Dict, Union
 import pickle
 
 # SeQUeNCe imports
@@ -10,7 +9,6 @@ from .event import Event
 
 # Interpreter imports
 from test.support import interpreters
-from textwrap import dedent
 import os
 
 
@@ -71,6 +69,9 @@ class ThreadedTimeline(Timeline):
         self.computing_time = 0
         self.communication_time = 0
 
+        self.read_ops = 0
+        self.write_ops = 0
+
 
     def schedule(self, event: 'Event'):
         """Method to schedule an event."""
@@ -110,6 +111,7 @@ class ThreadedTimeline(Timeline):
             with open(self.send_file, 'wb') as file:
                 # Write data as tuple to entire event buffer can be written at once
                 pickle.dump((self.event_buffer[index],), file)
+                self.write_ops += 1
 
 
     def receive_event_buffer_from_file(self):
@@ -119,6 +121,8 @@ class ThreadedTimeline(Timeline):
         # synchronization windows, I may be able to remove the while loop.
         # TODO: Verify this later...
         while True:
+            # Added this because the subinterpreter kept getting hung up on the last
+            # read operation and I have zero clue why.
             if os.path.exists("signal.txt"):
                 return [float('inf')]
             try:
@@ -135,6 +139,7 @@ class ThreadedTimeline(Timeline):
                     # Clear file when done reading
                     with open(self.recv_file, 'wb') as file:
                         pass
+                    self.read_ops += 1
                     return data
             except IOError as e:
                 if e.errno != 11:  # Ignore "Resource temporarily unavailable" error
@@ -163,6 +168,8 @@ class ThreadedTimeline(Timeline):
             # Get index of event buffer that contains all other foreign events
             buf_index = 1 - int(self.id)
 
+            #if self.write_ops >= 998:
+                #print(f"Interp {self.id} sending buffer of size {len(self.event_buffer[0])} or {len(self.event_buffer[1])}")
             # Send data from current timeline to queue file
             self.send_event_buffer_to_file(buf_index)
 
@@ -191,13 +198,14 @@ class ThreadedTimeline(Timeline):
                     self.exchange_counter += 1
                     self.schedule(event)
 
-            # Throw AssertionError if min_time is less than the timeline's time
+            # Throw AssertionError if min_time is less than the timeline's current time
             assert min_time >= self.time
 
             # Exit current simulation loop if the sim stop time is reached
             if min_time >= self.stop_time:
                 break
 
+            # Increment synchronization window counter
             self.sync_counter += 1
 
             sync_time = min(min_time + self.lookahead, self.stop_time)

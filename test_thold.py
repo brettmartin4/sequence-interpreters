@@ -31,6 +31,7 @@ def main(args):
     current_directory = os.getcwd()
     sub_queue_path = os.path.join(current_directory, 'sub-queue.pkl')
     main_queue_path = os.path.join(current_directory, 'main-queue.pkl')
+    signal_file = os.path.join(current_directory, 'signal.txt')
 
     # Create queue files:
     for path in [main_queue_path, sub_queue_path]:
@@ -41,8 +42,8 @@ def main(args):
     if(main_interp.id == cur.id):
         print(f"Interpreter {cur.id} initializing in main interpreter ({os.getcwd()})...")
 
-        if os.path.exists("signal.txt"):
-            os.remove("signal.txt")
+        if os.path.exists(signal_file):
+            os.remove(signal_file)
 
         recv_file = main_queue_path
         send_file = sub_queue_path
@@ -65,7 +66,7 @@ def main(args):
 
         # Must sleep for a moment while sub-interpreter spins online.
         # Otherwise, errors might occur.
-        time.sleep(1)
+        #time.sleep(1)
 
     # SUBINTERPRETER ONLY
     else:
@@ -88,19 +89,30 @@ def main(args):
     print(f"Initializing timelines from interpreter: {cur.id}...")
     timeline.init()
     print("Running timelines...")
+    start_time = time.time()
     timeline.run()
+    print(f"Simulation ran in {time.time() - start_time} sec")
+
 
     # Print simulation results
     print(timeline.id, timeline.now(), timeline.events.top().time, timeline.sync_counter, timeline.run_counter,
-          sum([len(buf) for buf in timeline.event_buffer]), len(timeline.events))
+          sum([len(buf) for buf in timeline.event_buffer]), len(timeline.events), timeline.read_ops, timeline.write_ops)
     
-    with open("signal.txt", "w") as file:
+    time.sleep(1)
+
+    # Signals other interpreter to quit if hung up
+    with open(signal_file, "w") as file:
         pass
     
-    # Clean up interpreters
-    time.sleep(1)
     if(main_interp.id == cur.id):
+        # Clean up interpreters
+        time.sleep(1)
         cleanup_interpreters()
+        # Clean up files
+        for file in [main_queue_path, sub_queue_path, signal_file]:
+            if os.path.exists(file):
+                os.remove(file)
+
 
 
 if __name__ == "__main__":
