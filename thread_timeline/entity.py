@@ -1,6 +1,8 @@
-"""Definition of abstract Entity class.
+"""
+Definition of abstract Entity class.
 
-This module defines the Entity class, inherited by all physical simulation elements (including hardware and photons).
+This module defines the Entity class, inherited by all physical simulation
+elements (including hardware and photons).
 """
 
 from abc import ABC, abstractmethod
@@ -14,21 +16,28 @@ if TYPE_CHECKING:
 
 
 class Entity(ABC):
-    """Abstract Entity class.
+    """
+    Abstract Entity class.
+
     Entity should use the provided pseudo random number generator (PRNG) to
-    produce reproducible random numbers. As a result, simulations with the same
-    seed can reproduce identical results. Function "get_generator" returns the PRNG.
+    produce reproducible random numbers. As a result, simulations with the
+    same seed can reproduce identical results. Function "get_generator"
+    returns the PRNG. For the purpose of this Interpreters demo, however,
+    this PRNG is not used.
 
     Attributes:
         name (str): name of the entity.
         timeline (Timeline): the simulation timeline for the entity.
-        owner (Entity): another entity that owns or aggregates the current entity.
+        owner (Entity): another entity that owns or aggregates the current
+            entity.
         _observers (List): a list of observers for the entity.
-        _receivers (List[Entity]): a list of entities that receive photons from current component.
+        _receivers (List[Entity]): a list of entities that receive photons
+            from current component.
     """
 
     def __init__(self, name: str, timeline: "Timeline") -> None:
-        """Constructor for entity class.
+        """
+        Constructor for entity class.
 
         Args:
             name (str): name of entity.
@@ -45,10 +54,12 @@ class Entity(ABC):
 
     @abstractmethod
     def init(self) -> None:
-        """Method to initialize entity (abstract).
+        """
+        Method to initialize entity (abstract).
 
-        Entity `init` methods are invoked for all timeline entities when the timeline is initialized.
-        This method can be used to perform any necessary functions before simulation.
+        Entity `init` methods are invoked for all timeline entities when the
+        timeline is initialized. This method can be used to perform any
+        necessary functions before simulation.
         """
 
         pass
@@ -75,34 +86,40 @@ class Entity(ABC):
 
     #def get(self, photon: "Photon", **kwargs):
     def get(self, **kwargs):
-        """Method for an entity to receive a photon.
+        """
+        Method for an entity to receive a photon.
 
         If entity is a node, may forward to external quantum channel.
         Must be overwritten to be used, or will raise exception.
 
-        EDIT: Updated to remove photon and keyword arguments for the purpose of interpreters demo.
+        EDIT: Updated to remove photon and keyword arguments for the purpose
+        of interpreters demo.
 
         Args:
             photon (Photon): photon received by the entity.
-            **kwargs: other arguments required by a particular hardware component.
+            **kwargs: other arguments required by a particular hardware
+                component.
         """
 
         raise Exception("get method called on non-receiving class.")
 
     def remove_from_timeline(self) -> None:
-        """Method to remove entity from attached timeline.
+        """
+        Method to remove entity from attached timeline.
 
         This is to allow unused entities to be garbage collected.
         """
         self.timeline.remove_entity_by_name(self.name)
 
     def get_generator(self):
-        """Method to get random generator of parent node.
+        """
+        Method to get random generator of parent node.
 
         If entity is not attached to a node, return default generator.
 
-        EDIT: Updated to return only a string. Generator isn't necessary for basic timeline experiment, and
-        NumPy is not supported with interpreters in Python/C API 3.12. Will update once NumPy support is
+        EDIT: Updated to return only a string. Generator isn't necessary for
+        basic timeline experiment, and NumPy is not supported with
+        interpreters in Python/C API 3.12. Will update once NumPy support is
         available for subinterpreters.
         """
         if hasattr(self.owner, "get_generator"):

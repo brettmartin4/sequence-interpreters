@@ -31,12 +31,15 @@ class EventList:
         for data in self.data:
             yield data
 
+    # Add event to bottom of heap
     def push(self, event: "Event") -> "None":
         heappush(self.data, event)
 
+    # Pops and returns event with lowest time and priority
     def pop(self) -> "Event":
         return heappop(self.data)
 
+    # Returns data from event with the lowest time and priority
     def top(self) -> "Event":
         return self.data[0]
 

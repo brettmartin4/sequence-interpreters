@@ -1,6 +1,9 @@
-"""Definition of main Timeline class.
+"""
+Definition of main Timeline class.
 
-This module defines the Timeline class, which provides an interface for the simulation kernel and drives event execution.
+This module defines the Timeline class, which provides an interface for the
+simulation kernel and drives event execution.
+
 All entities are required to have an attached timeline for simulation.
 """
 
@@ -38,24 +41,32 @@ class Timeline:
     """Class for a simulation timeline.
 
     Timeline holds entities, which are configured before the simulation.
-    Before the start of simulation, the timeline must initialize all controlled entities.
+    Before the start of simulation, the timeline must initialize all
+    controlled entities.
     The initialization of entities may schedule events.
     The timeline pushes these events to its event list.
-    The timeline starts simulation by popping the top event in the event list repeatedly.
+    The timeline starts simulation by popping the top event in the event list
+    repeatedly.
     The time of popped event becomes current simulation time of the timeline.
     The process of popped event is executed.
-    The simulation stops if the timestamp on popped event is equal or larger than the stop time, or if the eventlist is empty.
+    The simulation stops if the timestamp on popped event is equal or larger
+    than the stop time, or if the eventlist is empty.
 
-    To monitor the progress of simulation, the Timeline.show_progress attribute can be modified to show/hide a progress bar.
+    To monitor the progress of simulation, the Timeline.show_progress
+    attribute can ordinarily be modified to show/hide a progress bar. For the
+    purpose of this Threaded Timeline example, however, this feature has been
+    removed to conserve threads.
 
     Attributes:
         events (EventList): the event list of timeline.
-        entities (List[Entity]): the entity list of timeline used for initialization.
+        entities (List[Entity]): the entity list of timeline used for
+            initialization.
         time (int): current simulation time (picoseconds).
         stop_time (int): the stop (simulation) time of the simulation.
         schedule_counter (int): the counter of scheduled events
         run_counter (int): the counter of executed events
-        is_running (bool): records if the simulation has stopped executing events.
+        is_running (bool): records if the simulation has stopped executing
+            events.
         show_progress (bool): show/hide the progress bar of simulation.
         quantum_manager (QuantumManager): quantum state manager.
     """
@@ -66,7 +77,8 @@ class Timeline:
         Args:
             stop_time (int): stop time (in ps) of simulation (default inf).
             formalism (str): formalism of quantum state representation.
-            truncation (int): truncation of Hilbert space (currently only for Fock representation).
+            truncation (int): truncation of Hilbert space (currently only for
+                Fock representation).
         """
         self.events: EventList = EventList()
         self.entities: Dict[str, "Entity"] = {}
@@ -112,8 +124,9 @@ class Timeline:
         """Main simulation method.
 
         The `run` method begins simulation of events.
-        Events are continuously popped and executed, until the simulation time limit is reached or events are exhausted.
-        A progress bar may also be displayed, if the `show_progress` flag is set.
+        Events are continuously popped and executed, until the simulation time
+        limit is reached or events are exhausted. The `show_progress` feature
+        has been disabled for this Threaded Timeline example.
         """
         #log.logger.info("Timeline start simulation")
         tick = time_ns()
@@ -174,14 +187,16 @@ class Timeline:
     def seed(self, seed: int) -> None:
         """Sets random seed for simulation."""
 
-        # EDIT: Updated to do nothing until interpreters module allows NumPy support
+        # EDIT: Updated to do nothing until Interpreters module allows NumPy
+        # support
         pass
         #random.seed(seed)
 
     def progress_bar(self):
         """Method to draw progress bar.
 
-        Progress bar will display the execution time of simulation, as well as the current simulation time.
+        Progress bar will display the execution time of simulation, as well as
+        the current simulation time.
         """
 
         # EDIT: Not used in interpreters demo
