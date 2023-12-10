@@ -38,7 +38,8 @@ SECONDS_PER_MINUTE = MINUTES_PER_HOUR = 60
 
 
 class Timeline:
-    """Class for a simulation timeline.
+    """
+    Class for a simulation timeline.
 
     Timeline holds entities, which are configured before the simulation.
     Before the start of simulation, the timeline must initialize all
@@ -72,7 +73,8 @@ class Timeline:
     """
 
     def __init__(self, stop_time=inf):
-        """Constructor for timeline.
+        """
+        Constructor for timeline.
 
         Args:
             stop_time (int): stop time (in ps) of simulation (default inf).

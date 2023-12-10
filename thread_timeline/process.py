@@ -35,4 +35,5 @@ class Process:
         passed as args.
         """
 
-        return getattr(self.owner, self.activation)(*self.act_params, **self.act_kwargs)
+        return getattr(self.owner, self.activation)(*self.act_params, 
+                                                    **self.act_kwargs)
