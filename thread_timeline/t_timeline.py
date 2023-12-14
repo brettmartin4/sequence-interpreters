@@ -1,15 +1,12 @@
 from time import time
-import pickle
+import os, pickle
 
-# SeQUeNCe imports
 from .timeline import Timeline
 from .event import Event
 #from sequence.kernel.quantum_manager import KET_STATE_FORMALISM
 #from .quantum_manager_client import QuantumManagerClient
 
-# Interpreter imports
 from test.support import interpreters
-import os
 
 
 class ThreadedTimeline(Timeline):
@@ -23,7 +20,7 @@ class ThreadedTimeline(Timeline):
     belonging to other timelines, an event buffer is maintained. These buffers
     are exchanged between timelines at regular synchronization intervals. All
     Threaded Timelines in a simulation communicate with a Quantum Manager
-    Server for shared quantum states.
+    Server for shared quantum states (not yet supported with Interpreters).
 
     Attributes:
         id (int): ID for the interpreter running the Threaded Timeline
@@ -34,15 +31,13 @@ class ThreadedTimeline(Timeline):
             foreign entities; swapped during synchronization.
         lookahead (int): defines width of time window for execution
             (simulation time between synchronization).
-        recv_file (str): Name of the file in which data is received from
-            another interpreter.
-        send_file (str): Name of the file through which data is sent to
-            another interpreter.
-        mutex (Lock): Mutex used to prevent race condition for send/recv
-            "queue" files.
+        recv_channel (RecvChannel): Interpreter Receiver Channel in which data
+            is received from another interpreter.
+        send_channel (SendChannel): Interpreter Send Channel through which
+            data is sent to another interpreter.
     """
 
-    def __init__(self, recv_file, send_file, mutex, lookahead: int,
+    def __init__(self, recv_channel, send_channel, lookahead: int,
                  stop_time=float('inf')):
         """
         Constructor for ThreadedTimeline class.
@@ -52,9 +47,8 @@ class ThreadedTimeline(Timeline):
         timeline class.
         
         Args:
-            recv_file (str): name of receiver "queue" file in memory.
-            send_file (str): name of sender "queue" file in memory.
-            mutex (Lock): mutex lock for send/recv "queue" files
+            recv_channel (RecvChannel): Cross-interpreter receiver channel.
+            send_channel (SendChannel): Cross-interpreter sender channel.
             lookahead (int): sets the timeline lookahead time.
             stop_time (int): stop (simulation) time of simulation
                 (default inf).
@@ -70,9 +64,8 @@ class ThreadedTimeline(Timeline):
         #if qm_ip is not None and qm_port is not None:
         #    self.quantum_manager = QuantumManagerClient(formalism, qm_ip, qm_port)
 
-        self.recv_file = recv_file
-        self.send_file = send_file
-        self.mutex = mutex
+        self.recv_channel = recv_channel
+        self.send_channel = send_channel
 
         #self.show_progress = False
 
@@ -82,9 +75,6 @@ class ThreadedTimeline(Timeline):
         self.exchange_counter = 0
         self.computing_time = 0
         self.communication_time = 0
-
-        self.read_ops = 0
-        self.write_ops = 0
 
 
     def schedule(self, event: 'Event'):
@@ -129,78 +119,6 @@ class ThreadedTimeline(Timeline):
             return float('inf')
         
 
-    def send_event_buffer_to_file(self, index):
-        """
-        Method to write event buffer to other interpreter's receive "queue"
-        file.
-
-        Used to transfer data from the current interpreter's event buffer to
-        the event buffer of the other interpreter using a pkl file as a 
-        storage medium. Interpreter Channels currently do not support
-        communication between interpreters, and FIFOs (named pipes) cause
-        issues, so inter-interpreter communication is handled by writing data
-        to and from a byte file.
-
-        Args:
-            index (int): Index of the event buffer containing foreign entity
-                events.
-        """
-        with self.mutex:   # Acquire mutex lock
-            #print(f"{self.id} Writing event buffer of size {len(self.event_buffer[0])} or {len(self.event_buffer[1])}\n")
-            with open(self.send_file, 'wb') as file:
-                # Write data as tuple to entire event buffer can be written at once
-                pickle.dump((self.event_buffer[index],), file)
-                self.write_ops += 1
-
-
-    def receive_event_buffer_from_file(self):
-        """
-        Method to read data from other interpreter's send "queue" file.
-
-        Used to transfer data from the other interpreter's event buffer to the
-        current interpreter's event buffer using a pkl file as a storage
-        medium. Interpreter Channels currently do not support communication
-        between interpreters, and FIFOs (named pipes) cause issues, so
-        inter-interpreter communication is handled by writing data to and from
-        a byte file.
-
-        Raises:
-            IOError: Raised and ignored when "resource temporarily
-                unavailable" error occurs.
-        """
-
-        # Repeat until the read file populates.
-        # Depending on how SeQUeNCe timelines handle read/write ops between
-        # synchronization windows, I may be able to remove the while loop.
-        # TODO: Verify this later...
-        while True:
-            # Added this because the subinterpreter kept getting hung up on
-            # the last read operation and I have zero clue why.
-            if os.path.exists("signal.txt"):
-                return [float('inf')]
-            try:
-                with self.mutex:   # Acquire mutex lock
-                    with open(self.recv_file, 'rb') as file:
-                        #file_size = os.path.getsize(file)
-                        file_size = os.fstat(file.fileno()).st_size
-
-                        if file_size == 0:
-                            continue
-
-                        # Load data as tuple, take event buffer list from
-                        # start index
-                        data = pickle.load(file)[0]
-                    # Clear file when done reading
-                    with open(self.recv_file, 'wb') as file:
-                        pass
-                    self.read_ops += 1
-                    return data
-            except IOError as e:
-                if e.errno != 11:  # Ignore "Resource temporarily unavailable"
-                    raise
-                pass
-        
-
     def run(self):
         """Runs the simulation until stop time is reached."""
         
@@ -213,23 +131,15 @@ class ThreadedTimeline(Timeline):
             for buf in self.event_buffer:
                 buf.append(min_time)
 
-            # UPDATE #
-            # Use file writes/reads for comms instead of MPI (Remove once
-            # cpython fixes inter-interpreter Channel support)
-            # The following lines until "END UPDATE" are all meant to replace
-            # the following line from the parallel timeline:
-            #inbox = MPI.COMM_WORLD.alltoall(self.event_buffer)
-
             # Get index of event buffer that contains all other foreign events
+            # and send over interpreter channel.
             buf_index = 1 - int(self.id)
-            self.send_event_buffer_to_file(buf_index)
+            self.send_channel.send_nowait(pickle.dumps((self.event_buffer[buf_index],)))
 
-            # Load data from other timelines via receiver "queue" file
-            recv_buf = self.receive_event_buffer_from_file()
+            # Receive event buffer from other timeline
+            recv_buf = pickle.loads(self.recv_channel.recv(_delay=0))[0]
             inbox = []
             inbox.append(recv_buf)
-
-            # END UPDATE #
 
             # Record time taken to communicate data between interpreters
             self.communication_time += time() - tick
